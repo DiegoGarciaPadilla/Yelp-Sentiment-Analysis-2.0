@@ -3,3 +3,230 @@
 **Autor:** Diego Antonio García Padilla
 
 **Matrícula:** A01710777
+
+## 1 Dataset
+
+El dataset utilizado es el **[Yelp Academic Dataset](https://www.kaggle.com/datasets/yelp-dataset/yelp-dataset)**, que contiene aproximadamente 7 millones de reseñas de negocios de la plataforma Yelp. Este dataset es ampliamente reconocido en la comunidad académica y ofrece:
+
+- **Escala:** Suficientes datos para entrenar modelos complejos de deep learning
+- **Diversidad:** Reviews de múltiples categorías de negocios y ubicaciones geográficas
+- **Autenticidad:** Feedback real de usuarios con sus respectivas calificaciones
+- **Riqueza lingüística:** Variedad en longitud, estilo y expresividad del texto
+
+## 2 Preparación del entorno
+
+El proyecto fue desarrollado originalmente en **Google Colab**, utilizando:
+
+- Gemini integrado para la documentación
+- Google Drive para persistencia de datos
+
+**Ejecución Local (Opcional):**
+
+Para ejecutar el proyecto en un ambiente local:
+
+1. Crear entorno virtual
+
+```bash
+python -m venv venv
+```
+
+2. Activar entorno virtual
+
+ - Linux/Mac
+   
+```bash
+source venv/bin/activate
+```
+
+ - Windows
+
+```bash
+venv\Scripts\activate
+```
+
+3. Instalar dependencias
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Remover celdas específicas de Colab
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
+
+## 3. ETL (Extract, Transform, Load)
+
+El proceso ETL se documentó en el notebook `PortfolioETL.ipynb` y consistió en tres fases principales.
+
+### 3.1 Extracción
+
+La extracción del dataset se realizó mediante la librería `kagglehub`, que descarga automáticamente los archivos del Yelp Academic Dataset desde Kaggle:
+
+```python
+import kagglehub
+
+# Download Yelp dataset
+
+yelp_path = kagglehub.dataset_download("yelp-dataset/yelp-dataset")
+print(f"Dataset downloaded to: {yelp_path}")
+```
+
+**Archivos obtenidos:**
+
+- `yelp_academic_dataset_review.json` (5.09 GB) - **Archivo principal utilizado**
+- `yelp_academic_dataset_business.json` (113 MB)
+- `yelp_academic_dataset_user.json` (3.2 GB)
+- `yelp_academic_dataset_checkin.json` (274 MB)
+- `yelp_academic_dataset_tip.json` (172 MB)
+
+Para este proyecto, únicamente se requirió el archivo de reviews, que contiene el texto y las calificaciones necesarias para el análisis de sentimientos.
+
+### 3.2 Transformación
+
+La transformación del dataset involucró seis pasos secuenciales de preprocesamiento:
+
+#### **Paso 1: Selección de features**
+
+Para optimizar el uso de memoria y enfocarse en las variables relevantes, se extrajeron únicamente dos columnas del dataset original: **text** y **stars**.
+
+```python
+def select_features(self, df: pd.DataFrame, features: list) -> pd.DataFrame:
+  return df[features].copy()
+
+
+df = self.select_features(df, ["text", "stars"])
+```
+
+#### **Paso 2: Eliminación de duplicados**
+
+Los duplicados pueden introducir sesgo al modelo, haciendo que memorice reviews repetidas en lugar de aprender patrones generalizables. Su eliminación asegura que cada ejemplo de entrenamiento sea único.
+
+```python
+def drop_duplicates(self, df):
+  return df.drop_duplicates()
+```
+
+#### **Paso 3: Creación de feature de sentimiento**
+
+Dado que el dataset original utiliza calificaciones de 1-5 estrellas, se creó una variable categórica `sentiment` que agrupa las estrellas en tres clases:
+
+```python
+def create_sentiment_column(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _classify(stars):
+      if stars in (1.0, 2.0): return "negative"
+      if stars == 3.0:        return "neutral"
+      if stars in (4.0, 5.0): return "positive"
+      return None
+
+    df = df.copy()
+    df["sentiment"] = df["stars"].apply(_classify)
+
+    return df[["text", "sentiment"]]
+```
+
+**Mapeo:**
+
+- **Negativo:** 1-2 estrellas (experiencias insatisfactorias)
+- **Neutral:** 3 estrellas (experiencias medianas o mixtas)
+- **Positivo:** 4-5 estrellas (experiencias satisfactorias)
+
+Este agrupamiento es estándar en análisis de sentimientos y refleja cómo los consumidores interpretan las calificaciones en la práctica. Una calificación de 3/5 raramente se considera "positiva" en contextos comerciales.
+
+#### **Paso 4: Balanceo del dataset**
+
+Dado que las reviews de Yelp presentan un desbalance natural, se implementó un downsample para igualar el número de ejemplos por clase:
+
+- ~67% positivas (4-5 estrellas)
+- ~23% negativas (1-2 estrellas)
+- ~10% neutrales (3 estrellas)
+
+```python
+def balance_dataset(self, df: pd.DataFrame) -> pd.DataFrame:
+    min_count = df["sentiment"].value_counts().min()
+    print(f"  Balancing to {min_count:,} reviews per class…")
+
+    df_balanced = (
+      df.groupby("sentiment", group_keys=False)
+        .apply(lambda g: g.head(min_count))
+        .reset_index(drop=True)
+    )
+
+    print(f"  Balanced size: {len(df_balanced):,} reviews")
+    return df_balanced
+
+```
+
+Sin este balanceo, un modelo "ingenuo" podría alcanzar 67% de accuracy simplemente prediciendo "positivo" para todas las reviews, sin aprender realmente a distinguir sentimientos. El balanceo fuerza al modelo a aprender características discriminativas de cada clase.
+
+Sin embargo, esto no es suficiente: elegir la métrica de evaluación adecuada, como el F1-score, es crucial para evaluar el rendimiento del modelo. Esto se verá más adelante.
+
+#### **Paso 5: Limpieza de texto**
+
+```python
+def clean_text(self, df: pd.DataFrame) -> pd.DataFrame:
+    print("  Cleaning text…")
+    df = df.copy()
+    df["text_length"] = df["text"].str.len()
+    df["word_count"]  = df["text"].str.split().str.len()
+    df["text_clean"]  = df["text"].str.lower().str.replace(r"[^a-zA-Z0-9\s]", "", regex=True)
+    return df
+```
+
+Se realizaron las siguientes operaciones:
+
+1. **Cálculo de `text_length`:** Número de caracteres (útil para análisis posterior)
+2. **Cálculo de `word_count`:** Número de palabras (correlación con complejidad)
+3. **Normalización a minúsculas:** "Great" = "great" = "GREAT"
+4. **Eliminación de puntuación y caracteres especiales:** "amazing!!!" → "amazing"
+
+La normalización ayuda a reducir el tamaño del vocabulario y mejorar la generalización, haciéndolo más robusto a variaciones en el texto.
+
+#### **Paso 6: Tokenización y eliminación de stopwords**
+
+```python
+def clean_text(self, df: pd.DataFrame) -> pd.DataFrame:
+    print("  Cleaning text…")
+    df = df.copy()
+    df["text_length"] = df["text"].str.len()
+    df["word_count"]  = df["text"].str.split().str.len()
+    df["text_clean"]  = df["text"].str.lower().str.replace(r"[^a-zA-Z0-9\s]", "", regex=True)
+    return df
+
+  def tokenize_text(self, df: pd.DataFrame) -> pd.DataFrame:
+    print("  Tokenizing and removing stop words…")
+    df = df.copy()
+    df["tokens"] = df["text_clean"].apply(
+      lambda x: word_tokenize(x) if isinstance(x, str) else []
+    )
+    df["tokens_filtered"] = df["tokens"].apply(
+      lambda tokens: [w for w in tokens if w not in self.STOP_WORDS and w]
+    )
+    return df
+```
+
+Remueve palabras comunes sin valor semántico:
+
+```
+["great", "food", "and", "service"] → ["great", "food", "service"]
+```
+
+Los modelos de ML no pueden procesar texto directamente; requieren representaciones numéricas. La tokenización es el primer paso para convertir texto → números (embeddings). Las stopwords ("the", "is", "and", "was") aparecen con igual frecuencia en reviews positivas y negativas, por lo que no aportan poder discriminativo y solo inflan el vocabulario.
+
+### 3.3 Carga
+
+El dataset procesado se guardó en formato Parquet para persistencia eficiente,
+
+El dataset final contiene las siguientes columnas:
+
+- `text`: texto original
+- `sentiment`: sentimiento (positivo, negativo, neutral)
+- `text_length`: número de caracteres
+- `word_count`: número de palabras
+- `text_clean`: texto limpio (minúsculas, sin puntuación)
+- `tokens`: tokens del texto
+- `tokens_filtered`: tokens del texto sin stopwords
+
+Con el dataset limpio, balanceado y tokenizado, el siguiente paso natural fue diseñar arquitecturas de deep learning capaces de extraer patrones significativos de estos millones de reviews. La estrategia consistió en comenzar con un modelo simple para establecer un baseline, e incrementar progresivamente la sofisticación mediante técnicas modernas de transfer learning.
