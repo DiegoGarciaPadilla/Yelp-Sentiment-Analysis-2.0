@@ -57,7 +57,7 @@ from google.colab import drive
 drive.mount('/content/drive')
 ```
 
-## 3. ETL (Extract, Transform, Load)
+## 3 ETL (Extract, Transform, Load)
 
 El proceso ETL se documentó en el notebook `PortfolioETL.ipynb` y consistió en tres fases principales.
 
