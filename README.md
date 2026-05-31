@@ -163,57 +163,11 @@ Sin este balanceo, un modelo "ingenuo" podría alcanzar 67% de accuracy simpleme
 
 Sin embargo, esto no es suficiente: elegir la métrica de evaluación adecuada, como el F1-score, es crucial para evaluar el rendimiento del modelo. Esto se verá más adelante.
 
-#### **Paso 5: Limpieza de texto**
+#### Nota sobre el preprocesamiento
 
-```python
-def clean_text(self, df: pd.DataFrame) -> pd.DataFrame:
-    print("  Cleaning text…")
-    df = df.copy()
-    df["text_length"] = df["text"].str.len()
-    df["word_count"]  = df["text"].str.split().str.len()
-    df["text_clean"]  = df["text"].str.lower().str.replace(r"[^a-zA-Z0-9\s]", "", regex=True)
-    return df
-```
+En el caso de los modelos basados en BERT, se omite deliberadamente el proceso estándar de limpieza de texto (eliminación de palabras vacías, lematización y tokenización personalizada).
 
-Se realizaron las siguientes operaciones:
-
-1. **Cálculo de `text_length`:** Número de caracteres (útil para análisis posterior)
-2. **Cálculo de `word_count`:** Número de palabras (correlación con complejidad)
-3. **Normalización a minúsculas:** "Great" = "great" = "GREAT"
-4. **Eliminación de puntuación y caracteres especiales:** "amazing!!!" → "amazing"
-
-La normalización ayuda a reducir el tamaño del vocabulario y mejorar la generalización, haciéndolo más robusto a variaciones en el texto.
-
-#### **Paso 6: Tokenización y eliminación de stopwords**
-
-```python
-def clean_text(self, df: pd.DataFrame) -> pd.DataFrame:
-    print("  Cleaning text…")
-    df = df.copy()
-    df["text_length"] = df["text"].str.len()
-    df["word_count"]  = df["text"].str.split().str.len()
-    df["text_clean"]  = df["text"].str.lower().str.replace(r"[^a-zA-Z0-9\s]", "", regex=True)
-    return df
-
-  def tokenize_text(self, df: pd.DataFrame) -> pd.DataFrame:
-    print("  Tokenizing and removing stop words…")
-    df = df.copy()
-    df["tokens"] = df["text_clean"].apply(
-      lambda x: word_tokenize(x) if isinstance(x, str) else []
-    )
-    df["tokens_filtered"] = df["tokens"].apply(
-      lambda tokens: [w for w in tokens if w not in self.STOP_WORDS and w]
-    )
-    return df
-```
-
-Remueve palabras comunes sin valor semántico:
-
-```
-["great", "food", "and", "service"] → ["great", "food", "service"]
-```
-
-Los modelos de ML no pueden procesar texto directamente; requieren representaciones numéricas. La tokenización es el primer paso para convertir texto → números (embeddings). Las stopwords ("the", "is", "and", "was") aparecen con igual frecuencia en reviews positivas y negativas, por lo que no aportan poder discriminativo y solo inflan el vocabulario.
+El tokenizador de BERT se encarga internamente de todo el preprocesamiento necesario (conversión a minúsculas, división de subpalabras, relleno e inserción de tokens especiales). Lo único que hay que hacer es proporcionar la cadena de texto sin procesar de la reseña.
 
 ### 3.3 Carga
 
