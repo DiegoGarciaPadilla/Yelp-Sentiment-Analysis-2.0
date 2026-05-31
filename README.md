@@ -177,10 +177,5 @@ El dataset final contiene las siguientes columnas:
 
 - `text`: texto original
 - `sentiment`: sentimiento (positivo, negativo, neutral)
-- `text_length`: número de caracteres
-- `word_count`: número de palabras
-- `text_clean`: texto limpio (minúsculas, sin puntuación)
-- `tokens`: tokens del texto
-- `tokens_filtered`: tokens del texto sin stopwords
 
-Con el dataset limpio, balanceado y tokenizado, el siguiente paso natural fue diseñar arquitecturas de deep learning capaces de extraer patrones significativos de estos millones de reviews. La estrategia consistió en comenzar con un modelo simple para establecer un baseline, e incrementar progresivamente la sofisticación mediante técnicas modernas de transfer learning.
+El siguiente paso natural fue diseñar arquitecturas de deep learning capaces de extraer patrones significativos de estos millones de reviews. La estrategia consistió en comenzar con un modelo simple para establecer un baseline, e incrementar la complejidad mediante técnicas como la atención.
