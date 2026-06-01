@@ -1,0 +1,13 @@
+datasets
+kagglehub
+matplotlib
+numpy
+pandas
+pyarrow
+scikit-learn
+seaborn
+tabulate
+tensorflow==2.18.0
+tensorflow-metal==1.2.0
+tf-keras
+transformers<5.0.0
