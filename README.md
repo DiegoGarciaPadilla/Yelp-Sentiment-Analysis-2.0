@@ -217,7 +217,7 @@ Así mismo, se usó el optimizador Adam para el entrenamiento del modelo.
 
 1. ***BERT (Bidirectional Encoder Representations from Transformers):*** 
   
-BERT es un modelo de deep learning basado en transformers que ha demostrado ser muy eficaz en tareas de procesamiento de lenguaje natural.
+BERT (Devlin et al., 2018) es un modelo de deep learning basado en transformers que ha demostrado ser muy eficaz en tareas de procesamiento de lenguaje natural.
 
 2. ***BiLSTM (Bidirectional Long Short-Term Memory):*** 
 
@@ -278,4 +278,7 @@ Sin embargo, se puede mejorar para obtener un mejor rendimiento explorando técn
 
 ## Referencias
 
+- Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Version 2). arXiv. https://doi.org/10.48550/ARXIV.1810.04805
+
 - Nkhata, G., Gauch, S., Anjum, U., & Zhan, J. (2025). Fine-tuning BERT with Bidirectional LSTM for Fine-grained Movie Reviews Sentiment Analysis (Version 1). arXiv. https://doi.org/10.48550/ARXIV.2502.20682
+
