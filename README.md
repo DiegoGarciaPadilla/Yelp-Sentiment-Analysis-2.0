@@ -192,15 +192,15 @@ Este primer modelo, propuesto por Nkhata et al. (2025), consiste en un modelo BE
 
 La arquitectura del modelo es la siguiente:
 
-| Layer (type)                         | Output Shape                                                                                                                                                                                      | Param #      | Connected to                                  |
-| :-------------------------------------| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| :-------------| :----------------------------------------------|
-| `input_ids`                          | `[(None, 256)]`                                                                                                                                                                                   | 0            | `[]`                                          |
-| `attention_mask`                     | `[(None, 256)]`                                                                                                                                                                                   | 0            | `[]`                                          |
+| Layer (type)                         | Output Shape                                                                                                                                                                                      | Param #     | Connected to                                  |
+| :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------- | :-------------------------------------------- |
+| `input_ids`                          | `[(None, 256)]`                                                                                                                                                                                   | 0           | `[]`                                          |
+| `attention_mask`                     | `[(None, 256)]`                                                                                                                                                                                   | 0           | `[]`                                          |
 | `bert`                               | `TFBaseModelOutputWithPoolingAndCrossAttentions(last_hidden_state=(None, 256, 768), pooler_output=(None, 768), past_key_values=None, hidden_states=None, attentions=None, cross_attentions=None)` | 109,482,240 | `['input_ids[0][0]', 'attention_mask[0][0]']` |
-| `getitem_1`                          | `(None, 768)`                                                                                                                                                                                     | 0            | `['bert[0][0]']`                              |
-| `reshape_1` (Reshape)                | `(None, 1, 768)`                                                                                                                                                                                  | 0            | `['tf.__operators__.getitem_1[0][0]']`        |
+| `getitem_1`                          | `(None, 768)`                                                                                                                                                                                     | 0           | `['bert[0][0]']`                              |
+| `reshape_1` (Reshape)                | `(None, 1, 768)`                                                                                                                                                                                  | 0           | `['tf.__operators__.getitem_1[0][0]']`        |
 | `bidirectional_lstm` (Bidirectional) | `(None, 128)`                                                                                                                                                                                     | 426,496     | `['reshape_1[0][0]']`                         |
-| `output` (Dense)                     | `(None, 3)`                                                                                                                                                                                       | 387          | `['bidirectional_lstm[0][0]']`                |
+| `output` (Dense)                     | `(None, 3)`                                                                                                                                                                                       | 387         | `['bidirectional_lstm[0][0]']`                |
 
 **Hiperparámetros**
 
@@ -242,7 +242,7 @@ El modelo fue entrenado durante 4 epochs con los siguientes resultados:
 - **Mejor época:** 2 (Epoch 2)
 
 | **Loss** | **Accuracy** | **Precision** | **Recall** |
-| :---------| :-------------| :--------------| :-----------|
+| :------- | :----------- | :------------ | :--------- |
 | 0.3634   | 0.8492       | 0.8528        | 0.8450     |
 
 
@@ -276,9 +276,94 @@ El modelo alcanza ~85% de accuracy. Lo cual es una mejora sobre el primer acerca
 
 Sin embargo, se puede mejorar para obtener un mejor rendimiento explorando técnicas como el fine-tuning o la atención. 
 
+### 4.2 Modelo mejorado: BERT + BiLSTM + Attention
+
+Este modelo extiende la arquitectura de Nkhata et al. (2025) con dos cambios: uso de la secuencia completa de tokens en lugar del `[CLS]` y una capa de atención de Bahdanau (Bahdanau et al., 2015). La motivación proviene del propio artículo base, que en su trabajo futuro señala: *"exploring the nuanced contributions of different sentence components to sentiment prediction."* Yang et al. (2016) y Rahman et al. (2024) demuestran que BiLSTM + atención supera a BiLSTM solo en tareas de clasificación de sentimientos.
+ 
+#### 4.2.1 Arquitectura
+ 
+| Layer (type)                    | Output Shape                          | Param #     |
+| :------------------------------ | :------------------------------------ | :---------- |
+| `input_ids`                     | `(None, 256)`                         | 0           |
+| `attention_mask`                | `(None, 256)`                         | 0           |
+| `bert`                          | `last_hidden_state: (None, 256, 768)` | 109,482,240 |
+| `bidirectional_lstm`            | `(None, 256, 128)`                    | 426,496     |
+| `attention` (BahdanauAttention) | `(None, 128)`                         | 8,320       |
+| `output` (Dense + Softmax)      | `(None, 3)`                           | 387         |
+ 
+**Hiperparámetros:** idénticos al modelo base.
+ 
+**Descripción de las capas**
+ 
+1. ***BERT:*** Igual que en el modelo base. A diferencia del baseline, se utiliza `last_hidden_state` completo — un vector de 768 dimensiones por cada uno de los 256 tokens de entrada.
+
+2. ***BiLSTM (return_sequences=True):*** Al recibir los 256 vectores de tokens, procesa una secuencia real en ambas direcciones, produciendo un estado oculto de 128 dimensiones en cada posición.
+
+3. ***BahdanauAttention:*** Recibe los 256 estados ocultos del BiLSTM y computa un vector de contexto en tres pasos:
+
+   - **Score:** Una capa densa con activación `tanh` asigna una puntuación de relevancia a cada estado oculto.
+
+   - **Weight:** Un `softmax` normaliza las puntuaciones en una distribución de probabilidad sobre los 256 tokens.
+
+   - **Context:** Suma ponderada de los estados ocultos, concentrando la información de los tokens más relevantes.
+
+```
+Ejemplo: "La comida estaba bien pero el servicio fue terrible"
+  terrible → peso alto    (token decisivo para el sentimiento)
+  bien     → peso medio
+  La, el   → peso bajo    (tokens poco informativos)
+```
+ 
+4. ***Dense + Softmax:*** Igual que en el modelo base.
+
+#### 4.2.2 Resultados
+ 
+- **Épocas entrenadas:** 5/15
+- **Mejor época:** 2 (Epoch 2)
+
+| Loss   | Accuracy | Precision | Recall | Macro F1 (test) |
+| :----- | :------- | :-------- | :----- | :-------------- |
+| 0.3822 | 0.8426   | 0.8453    | 0.8403 | 0.8417          |
+ 
+![BERT + BiLSTM + Attention Training History](images/improved-training-history.png)
+ 
+El modelo exhibe el mismo patrón de overfitting que el baseline: métricas de entrenamiento en crecimiento continuo frente a métricas de validación estancadas desde la época 2.
+ 
+![BERT + BiLSTM + Attention Confusion Matrix](images/improved-confusion-matrix.png)
+ 
+**Métricas por clase (test set):**
+ 
+| Clase    | Precision | Recall | F1    |
+| :------- | :-------- | :----- | :---- |
+| Negative | 0.854     | 0.874  | 0.864 |
+| Neutral  | 0.755     | 0.791  | 0.772 |
+| Positive | 0.923     | 0.857  | 0.889 |
+ 
+La clase neutral continúa siendo la más difícil, con una F1 de 0.77 frente a 0.86–0.89 de las clases extremas.
+
+### 4.3 Comparación de modelos y conclusión
+ 
+| Modelo                    | Val Accuracy | Val Loss | Macro F1 (test) | Mejor época |
+| :------------------------ | :----------- | :------- | :-------------- | :---------- |
+| BERT + BiLSTM             | 0.8436       | 0.3846   | —               | 2/15        |
+| BERT + BiLSTM + Attention | 0.8426       | 0.3822   | 0.8417          | 2/5         |
+ 
+**Conclusión:**
+ 
+La adición de atención sobre la secuencia completa de tokens no produjo una mejora significativa respecto al baseline (~0.001 de diferencia en accuracy). Esto sugiere que el token `[CLS]` de BERT ya constituye una representación suficientemente rica para esta tarea: BERT cuenta internamente con 12 capas de self-attention que procesan el contexto completo, haciendo que una capa de atención adicional sea en gran medida redundante.
+ 
+Este resultado es consistente con la literatura: en datasets de reseñas con sentimiento mayoritariamente explícito como Yelp, los mecanismos de atención añaden valor principalmente en tareas que requieren razonamiento sobre fragmentos distantes o resolución de ambigüedad semántica compleja. La limitación principal de ambos modelos es la clase neutral, cuya ambigüedad lingüística intrínseca no se resuelve con cambios arquitectónicos.
+
 ## Referencias
 
-- Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Version 2). arXiv. https://doi.org/10.48550/ARXIV.1810.04805
+- Bahdanau, D., Cho, K., & Bengio, Y. (2015). Neural Machine Translation by Jointly Learning to Align and Translate. *ICLR 2015*. arXiv:1409.0473.
 
-- Nkhata, G., Gauch, S., Anjum, U., & Zhan, J. (2025). Fine-tuning BERT with Bidirectional LSTM for Fine-grained Movie Reviews Sentiment Analysis (Version 1). arXiv. https://doi.org/10.48550/ARXIV.2502.20682
+- Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2018). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. arXiv. https://doi.org/10.48550/ARXIV.1810.04805
 
+- Gou, L. et al. (2023). Integrating BERT Embeddings and BiLSTM for Emotion Analysis of Dialogue. *Computational Intelligence and Neuroscience*. https://doi.org/10.1155/2023/6618452
+
+- Nkhata, G., Gauch, S., Anjum, U., & Zhan, J. (2025). Fine-tuning BERT with Bidirectional LSTM for Fine-grained Movie Reviews Sentiment Analysis. arXiv. https://doi.org/10.48550/ARXIV.2502.20682
+
+- Rahman, M. M. et al. (2024). A BERT–LSTM–Attention Framework for Robust Multi-Class Sentiment Analysis on Twitter Data. *Systems*, 13(11). https://doi.org/10.3390/systems13110964
+
+- Yang, Z., Yang, D., Dyer, C., He, X., Smola, A., & Hovy, E. (2016). Hierarchical Attention Networks for Document Classification. *NAACL HLT 2016*, pp. 1480–1489.
